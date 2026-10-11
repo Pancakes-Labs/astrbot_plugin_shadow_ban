@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>影子封禁面板</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <main class="wrap">
+      <header class="head">
+        <h1 id="heading">影子封禁面板</h1>
+        <p id="desc" class="desc"></p>
+      </header>
+
+      <section class="cards">
+        <div class="card">
+          <span class="card-label" id="label-total">封禁用户</span>
+          <span class="card-value" id="total-users">-</span>
+        </div>
+        <div class="card">
+          <span class="card-label" id="label-blocks">累计拦截</span>
+          <span class="card-value" id="block-count">-</span>
+        </div>
+        <div class="card">
+          <span class="card-label" id="label-switch">插件总开关</span>
+          <span class="card-value" id="switch-state">-</span>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2 id="switches-title">生效范围</h2>
+        <ul class="switches" id="switches"></ul>
+      </section>
+
+      <section class="panel">
+        <h2 id="list-title">封禁名单</h2>
+        <div class="list-box" id="block-list">
+          <span class="empty" id="list-empty">暂无封禁用户</span>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <h2 id="recent-title">最近拦截记录</h2>
+          <button id="refresh" class="btn">刷新</button>
+        </div>
+        <div class="table-box">
+          <table class="table">
+            <thead>
+              <tr>
+                <th id="th-time">时间</th>
+                <th id="th-scope">类型</th>
+                <th id="th-platform">平台</th>
+                <th id="th-user">用户</th>
+                <th id="th-content">内容</th>
+              </tr>
+            </thead>
+            <tbody id="recent-body">
+              <tr>
+                <td colspan="5" class="empty" id="recent-empty">暂无记录</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>
