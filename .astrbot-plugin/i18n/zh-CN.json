@@ -1,76 +1,56 @@
 {
   "metadata": {
-    "display_name": "AstrBot 插件模板",
-    "short_desc": "一个演示 AstrBot 插件能力的起始模板。",
-    "desc": "一个为 AstrBot 设计的插件模板，演示了指令、消息事件、插件配置、国际化、插件 Pages、AI 工具、存储、文转图、会话控制等能力，适合作为个人或团队维护 AstrBot 插件仓库时的起始模板。"
+    "display_name": "影子封禁",
+    "short_desc": "静默拦截指定用户，让机器人对他“视而不见”。",
+    "desc": "Ban 掉你不喜欢的人，别让你 LLM 宝贵的 Token 浪费掉。群聊 @提及、引用机器人消息、唤醒词触发、私聊消息以及官方“主动回复”都会被拦截。"
   },
   "config": {
-    "greeting": {
-      "description": "默认问候语",
-      "hint": "用于 /helloworld 指令回复时的问候语。"
+    "enable": {
+      "description": "插件总开关",
+      "hint": "关闭后本插件完全不生效。"
     },
-    "count_limit": {
-      "description": "计数器上限",
-      "hint": "/count 指令计数达到上限后自动清零。"
+    "enable_group": {
+      "description": "群聊中启用影子封禁",
+      "hint": "关闭后，群聊中封禁名单不生效。"
     },
-    "enable_ai": {
-      "description": "是否启用 AI 相关指令",
-      "hint": "关闭后 /ask 等 AI 指令将不可用。"
+    "enable_private": {
+      "description": "私聊中启用影子封禁",
+      "hint": "开启后，封禁名单同样对私聊消息生效。"
     },
-    "enable_decorate": {
-      "description": "是否在回复末尾追加感叹号",
-      "hint": "仅用于演示 on_decorating_result 发送消息前钩子，开启后所有回复会追加感叹号。"
+    "blocked_users": {
+      "description": "封禁名单（用户 ID）",
+      "hint": "每行一个。可直接填写 QQ 号等裸 ID（在所有平台生效），也可使用“平台:ID”形式（如 aiocqhttp:123456）仅在指定平台生效。平台名参见 AstrBot 适配器名。"
     },
-    "enable_waiting_hint": {
-      "description": "LLM 响应前发送“正在思考”提示",
-      "hint": "仅用于演示 on_waiting_llm_request 钩子，开启后每次调用 LLM 都会先发送提示消息。默认关闭，避免影响日常对话。"
-    },
-    "mode": {
-      "description": "运行模式",
-      "labels": ["快速", "安全"]
-    },
-    "tags": {
-      "description": "标签列表",
-      "hint": "自定义标签，每个元素为字符串。"
-    },
-    "advanced": {
-      "description": "高级配置（嵌套对象）",
-      "items": {
-        "ratio": {
-          "description": "比例",
-          "hint": "0-1 之间的浮点数。"
-        }
-      }
-    },
-    "ai_provider": {
-      "description": "聊天模型提供商",
-      "hint": "在 WebUI 中下拉选择已配置的聊天模型提供商。"
-    },
-    "tts_provider": {
-      "description": "TTS 提供商",
-      "hint": "在 WebUI 中下拉选择已配置的语音合成提供商。"
-    },
-    "stt_provider": {
-      "description": "STT 提供商",
-      "hint": "在 WebUI 中下拉选择已配置的语音识别提供商。"
-    },
-    "persona": {
-      "description": "人格",
-      "hint": "在 WebUI 中下拉选择已配置的人格。"
-    },
-    "knowledgebase": {
-      "description": "知识库（支持多选）",
-      "hint": "在 WebUI 中多选已配置的知识库。"
+    "allow_command_llm": {
+      "description": "放行指令触发的 LLM 调用",
+      "hint": "开启后，通过指令（如 /xxx）触发的 LLM 请求不会被拦截，避免影响机器人的功能性回复。"
     }
   },
   "pages": {
-    "demo": {
-      "title": "演示页",
-      "description": "演示插件 Pages 如何与插件后端 API 通信。",
-      "heading": "插件 Pages 演示",
-      "desc": "一个通过 AstrBotPluginPage bridge 与插件后端通信的最小插件页面。",
-      "ping": "发送 Ping",
-      "loading": "加载中..."
+    "dashboard": {
+      "title": "影子封禁面板",
+      "description": "查看影子封禁的运行状态、封禁名单与最近拦截记录。",
+      "heading": "影子封禁面板",
+      "desc": "实时查看插件开关状态、封禁名单以及最近的拦截记录。",
+      "labelTotal": "封禁用户",
+      "labelBlocks": "累计拦截",
+      "labelSwitch": "插件总开关",
+      "switchesTitle": "生效范围",
+      "listTitle": "封禁名单",
+      "listEmpty": "暂无封禁用户",
+      "recentTitle": "最近拦截记录",
+      "thTime": "时间",
+      "thScope": "类型",
+      "thPlatform": "平台",
+      "thUser": "用户",
+      "thContent": "内容",
+      "recentEmpty": "暂无记录",
+      "refresh": "刷新",
+      "on": "已开启",
+      "off": "已关闭",
+      "scopeGroup": "群聊封禁",
+      "scopePrivate": "私聊封禁",
+      "scopeCommand": "放行指令 LLM"
     }
   }
 }

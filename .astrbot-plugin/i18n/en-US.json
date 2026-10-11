@@ -1,76 +1,56 @@
 {
   "metadata": {
-    "display_name": "AstrBot Plugin Template",
-    "short_desc": "A starter template demonstrating AstrBot plugin capabilities.",
-    "desc": "An AstrBot plugin template demonstrating commands, message events, plugin config, i18n, plugin Pages, AI tools, storage, HTML-to-image rendering and session control. Suitable as a starting template for maintaining an AstrBot plugin repository."
+    "display_name": "Shadow Ban",
+    "short_desc": "Silently block specified users so the bot ignores them.",
+    "desc": "Shadow ban the people you don't like and stop wasting your precious LLM tokens. Group @mentions, quoted replies, wake-word triggers, private messages and the built-in proactive reply will all be intercepted."
   },
   "config": {
-    "greeting": {
-      "description": "Default greeting",
-      "hint": "Used as the greeting in the /helloworld command reply."
+    "enable": {
+      "description": "Master switch",
+      "hint": "When disabled, this plugin takes no effect at all."
     },
-    "count_limit": {
-      "description": "Counter limit",
-      "hint": "The /count counter resets to zero when reaching this limit."
+    "enable_group": {
+      "description": "Enable shadow ban in group chats",
+      "hint": "When disabled, the block list has no effect in group chats."
     },
-    "enable_ai": {
-      "description": "Enable AI related commands",
-      "hint": "When disabled, AI commands like /ask will be unavailable."
+    "enable_private": {
+      "description": "Enable shadow ban in private chats",
+      "hint": "When enabled, the block list also applies to private messages."
     },
-    "enable_decorate": {
-      "description": "Append an exclamation mark to replies",
-      "hint": "Only for demonstrating the on_decorating_result hook; when enabled, all replies get an exclamation mark."
+    "blocked_users": {
+      "description": "Block list (user IDs)",
+      "hint": "One entry per line. Use a bare ID (e.g. a QQ number) to apply on all platforms, or \"platform:ID\" (e.g. aiocqhttp:123456) to apply only on a specific platform. Platform names match AstrBot adapter names."
     },
-    "enable_waiting_hint": {
-      "description": "Send a \"thinking...\" hint before LLM response",
-      "hint": "Only for demonstrating the on_waiting_llm_request hook; when enabled, a hint message is sent before every LLM call. Disabled by default to avoid affecting daily chat."
-    },
-    "mode": {
-      "description": "Running mode",
-      "labels": ["Fast", "Safe"]
-    },
-    "tags": {
-      "description": "Tag list",
-      "hint": "Custom tags, each element is a string."
-    },
-    "advanced": {
-      "description": "Advanced config (nested object)",
-      "items": {
-        "ratio": {
-          "description": "Ratio",
-          "hint": "A float between 0 and 1."
-        }
-      }
-    },
-    "ai_provider": {
-      "description": "Chat model provider",
-      "hint": "Select a configured chat model provider from the dropdown in the WebUI."
-    },
-    "tts_provider": {
-      "description": "TTS provider",
-      "hint": "Select a configured text-to-speech provider from the dropdown in the WebUI."
-    },
-    "stt_provider": {
-      "description": "STT provider",
-      "hint": "Select a configured speech-to-text provider from the dropdown in the WebUI."
-    },
-    "persona": {
-      "description": "Persona",
-      "hint": "Select a configured persona from the dropdown in the WebUI."
-    },
-    "knowledgebase": {
-      "description": "Knowledge base (multi-select)",
-      "hint": "Multi-select configured knowledge bases in the WebUI."
+    "allow_command_llm": {
+      "description": "Allow command-triggered LLM calls",
+      "hint": "When enabled, LLM requests triggered by commands (e.g. /xxx) are not intercepted, so the bot's functional replies keep working."
     }
   },
   "pages": {
-    "demo": {
-      "title": "Demo Page",
-      "description": "Demonstrates how a plugin Page talks to the plugin backend API.",
-      "heading": "Plugin Pages Demo",
-      "desc": "A minimal plugin Page talking to the plugin backend via the AstrBotPluginPage bridge.",
-      "ping": "Send Ping",
-      "loading": "Loading..."
+    "dashboard": {
+      "title": "Shadow Ban Dashboard",
+      "description": "View shadow ban status, the block list and recent interceptions.",
+      "heading": "Shadow Ban Dashboard",
+      "desc": "Monitor switch states, the block list and recent interceptions in real time.",
+      "labelTotal": "Blocked users",
+      "labelBlocks": "Total blocks",
+      "labelSwitch": "Master switch",
+      "switchesTitle": "Active scope",
+      "listTitle": "Block list",
+      "listEmpty": "No blocked users",
+      "recentTitle": "Recent interceptions",
+      "thTime": "Time",
+      "thScope": "Type",
+      "thPlatform": "Platform",
+      "thUser": "User",
+      "thContent": "Content",
+      "recentEmpty": "No records yet",
+      "refresh": "Refresh",
+      "on": "On",
+      "off": "Off",
+      "scopeGroup": "Group chat",
+      "scopePrivate": "Private chat",
+      "scopeCommand": "Allow command LLM"
     }
   }
 }
