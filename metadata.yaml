@@ -1,34 +1,35 @@
-name: astrbot_plugin_helloworld # 插件唯一识别名，以 astrbot_plugin_ 前缀开头
-display_name: AstrBot 插件模板 # 用于展示的名字，可以是方便人类阅读的名字（需要版本 >= v4.5.0，低版本不会报错，请放心填写）
-short_desc: 一个演示 AstrBot 插件能力的起始模板。 # （可选）插件市场卡片上的短描述，未提供时回退显示 desc
-desc: 一个为 AstrBot 设计的自定义插件模板，并演示了 AstrBot 插件支持的能力。基于官方基础模板扩展而来。适合作为个人或团队维护 AstrBot 插件仓库时的起始模板。 # 插件描述
-version: v1.0.1 # 插件版本号。格式：v1.1.1 或者 v1.1
+name: astrbot_plugin_shadow_ban # 插件唯一识别名
+display_name: 影子封禁（Shadow Ban） # 用于展示的名字
+short_desc: 静默拦截指定用户，让机器人对他“视而不见”。 # 插件市场卡片短描述
+desc: Ban 掉你不喜欢的人，别让你 LLM 宝贵的 Token 浪费掉。群聊 @提及、引用机器人消息、唤醒词触发、私聊消息以及官方“主动回复”都会被拦截。
+version: v1.0.0 # 插件版本号
 author: DBJD-CR # 作者
-repo: https://github.com/DBJD-CR/astrbot_plugin_helloworld # 插件的仓库地址
+repo: https://github.com/Pancakes-Labs/astrbot_plugin_shadow_ban # 插件仓库地址
 astrbot_version: ">=4.24.2" # 插件适配的 AstrBot 版本范围
-support_platforms: # 请替换为你的插件实际支持的平台
+support_platforms: # 声明支持的平台适配器
   - aiocqhttp
   - qq_official
   - qq_official_webhook
   - telegram
-  - wecom
-  - wecom_ai_bot
-  - lark
-  - dingtalk
   - discord
   - slack
-  - kook
-  - vocechat
+  - lark
+  - dingtalk
+  - wecom
+  - wecom_ai_bot
   - weixin_official_account
   - weixin_oc
   - satori
   - misskey
   - line
   - matrix
+  - kook
+  - vocechat
   - mattermost
 social_link: https://github.com/DBJD-CR
 tags:
-  - 插件模板
-  - template
-  - helloworld
+  - 封禁
+  - 黑名单
+  - 影子封禁
+  - 隐私
   - 工具
