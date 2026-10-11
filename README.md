@@ -2,8 +2,7 @@
 <!-- markdownlint-disable MD033 -->
 <!-- markdownlint-disable MD041 -->
 
-![astrbot_plugin_shadow_ban](https://socialify.git.ci/Pancakes-Labs/astrbot_plugin_shadow_ban/image?custom_description=AstrBot+Shadow+Ban+Plugin&description=1&font=Inter&forks=1&issues=1&language=1&name=1&owner=1&pattern=Brick+Wall&pulls=1&stargazers=1&theme=Auto)
-
+![astrbot_plugin_shadow_ban](https://socialify.git.ci/Pancakes-Labs/astrbot_plugin_shadow_ban/image?custom_description=%F0%9F%94%92+Ban+%E6%8E%89%E4%BD%A0%E4%B8%8D%E5%96%9C%E6%AC%A2%E7%9A%84%E4%BA%BA%EF%BC%8C%E5%88%AB%E8%AE%A9%E4%BD%A0+LLM+%E5%AE%9D%E8%B4%B5%E7%9A%84+Token+%E6%B5%AA%E8%B4%B9%E6%8E%89&custom_language=Python&description=1&font=Inter&forks=1&issues=1&language=1&name=1&owner=1&pattern=Brick+Wall&pulls=1&stargazers=1&theme=Auto)
 <p align="center">
   <img src="assets/PluginRank.svg" alt="Plugin Rank">
   <img src="assets/StarRank.svg" alt="Star Rank">
@@ -22,7 +21,7 @@
   <img src="https://img.shields.io/badge/QQ群-1033089808-12B7F3.svg" alt="QQ群">
 </p>
 
-[![Moe Counter](https://count.getloli.com/get/@DBJD-CR7?theme=moebooru)](https://github.com/DBJD-CR/astrbot_plugin_helloworld)
+[![Moe Counter](https://count.getloli.com/get/@DBJD-CR8?theme=moebooru)](https://github.com/Pancakes-Labs/astrbot_plugin_shadow_ban)
 
 ---
 
@@ -256,13 +255,13 @@ AstrBot/
 
 ```mermaid
 flowchart TD
-    A[用户消息] --> B[WakingCheckStage<br/>@ / 引用 / 唤醒词 / 私聊 判定]
-    B --> C[ProcessStage<br/>指令处理 / 主动回复 / 默认 LLM 请求]
-    C --> D{OnLLMRequestEvent<br/>影子封禁钩子}
-    D -->|命中封禁名单| E[event.stop_event<br/>终止传播]
-    E --> F[LLM 不执行<br/>消息不回送]
-    D -->|未命中 / 指令放行| G[正常调用 LLM]
-    G --> H[发送消息]
+    A["用户消息"] --> B["WakingCheckStage<br/>@ / 引用 / 唤醒词 / 私聊 判定"]
+    B --> C["ProcessStage<br/>指令处理 / 主动回复 / 默认 LLM 请求"]
+    C --> D{"OnLLMRequestEvent<br/>影子封禁钩子"}
+    D -->|"命中封禁名单"| E["event.stop_event<br/>终止传播"]
+    E --> F["LLM 不执行<br/>消息不回送"]
+    D -->|"未命中 / 指令放行"| G["正常调用 LLM"]
+    G --> H["发送消息"]
 ```
 
 核心思想：所有会触发 LLM 响应的入口，最终都会汇聚到 `OnLLMRequestEvent`。插件只需在此处做一次判定，即可实现对全部入口的统一拦截。
