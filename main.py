@@ -1,358 +1,321 @@
-"""AstrBot 插件模板主入口。
+"""
+用 OnLLMRequestEvent钩子做单点拦截，一旦命中封禁名单，
+立即调用 event.stop_event() 终止事件传播
 
-本文件以最小实现演示了 AstrBot 插件常用的能力，便于新开发者快速上手：
+由指令显式触发的 LLM 调用默认放行，
+因为这类请求通常属于机器人对指令的“功能性回应”，而非普通聊天。
 
-- 指令、指令组与带参指令
-- 权限过滤（仅管理员）
-- 富媒体消息链与主动消息
-- 插件配置（_conf_schema.json）读取
-- 插件 KV 存储与大文件存储规范
-- 事件钩子
-- 调用 LLM 与注册 LLM 工具
-- 文转图（HTML + Jinja2）
-- 会话控制（多轮交互）
-- 插件 Pages 后端 API
 """
 
-import asyncio
-import random
-from pathlib import Path
+from __future__ import annotations
 
-from mcp.types import CallToolResult
+import time
+from collections import deque
 
-import astrbot.api.message_components as Comp
 from astrbot.api import AstrBotConfig, logger
-from astrbot.api.event import AstrMessageEvent, MessageChain, MessageEventResult, filter
-from astrbot.api.provider import LLMResponse, ProviderRequest
+from astrbot.api.event import AstrMessageEvent, filter
+from astrbot.api.provider import ProviderRequest
 from astrbot.api.star import Context, Star
 from astrbot.api.web import json_response, request
-from astrbot.core.agent.run_context import ContextWrapper
-from astrbot.core.agent.tool import FunctionTool
-from astrbot.core.astr_agent_context import AstrAgentContext
-from astrbot.core.utils.astrbot_path import get_astrbot_data_path
-from astrbot.core.utils.session_waiter import (
-    SessionController,
-    SessionFilter,
-    session_waiter,
-)
 
-PLUGIN_NAME = "astrbot_plugin_helloworld"
+LOG_PREFIX = "[影子封禁]"
+PLUGIN_NAME = "astrbot_plugin_shadow_ban"
 
-# 文转图使用的 Jinja2 模板，支持 CSS 与循环/条件等语法。
-T2I_TMPL = """
-<div style="font-size: 28px; padding: 24px; color: #333;">
-  <h1 style="color: #4a90d9;">待办清单</h1>
-  <ul>
-    {% for item in items %}
-    <li>{{ item }}</li>
-    {% endfor %}
-  </ul>
-</div>
-"""
+# 面板中保留的最近拦截记录条数。
+RECENT_BLOCK_MAX = 100
+
+# 累计拦截次数在插件 KV 存储中的键名。
+BLOCK_COUNT_KEY = "block_count"
+
+# 兼容导入：不同 AstrBot 版本中指令过滤器的模块路径可能不同。
+# 导入失败时退化为仅依赖框架写入的事件附加信息进行判定，不影响主干功能。
+try:  # pragma: no cover - 仅在核心 API 变动时触发
+    from astrbot.core.star.filter.command import CommandFilter
+    from astrbot.core.star.filter.command_group import CommandGroupFilter
+
+    _COMMAND_FILTER_TYPES: tuple[type, ...] = (CommandFilter, CommandGroupFilter)
+except Exception:  # noqa: BLE001
+    _COMMAND_FILTER_TYPES = ()
 
 
-class MyPlugin(Star):
+class ShadowBanPlugin(Star):
+    """影子封禁插件主类。"""
+
     def __init__(self, context: Context, config: AstrBotConfig):
-        """AstrBot 会自动解析 _conf_schema.json 并将配置注入到 __init__。"""
+        """AstrBot 会自动解析 ``_conf_schema.json`` 并将配置注入到 ``__init__``。"""
         super().__init__(context)
         self.config = config
-        # 保护 KV 计数器读-改-写的 asyncio 锁，避免并发调用时计数丢失。
-        self._count_lock = asyncio.Lock()
+        # 最近的拦截记录（内存环形缓冲，供 WebUI 面板展示）。
+        self._recent_blocks: deque[dict] = deque(maxlen=RECENT_BLOCK_MAX)
+        # 累计拦截次数（持久化于插件 KV 存储，跨重载 / 重启保留）。
+        self._block_count = 0
+        # 标记累计值是否已从存储加载，避免自增时覆盖历史数据。
+        self._block_count_loaded = False
 
-        # 存储大文件规范：大文件（图片、日志等）请存放于
-        # data/plugin_data/<plugin_name>/ 目录下，避免插件更新时数据被覆盖。
-        self.plugin_data_path = (
-            Path(get_astrbot_data_path()) / "plugin_data" / self.name
-        )
-        self.plugin_data_path.mkdir(parents=True, exist_ok=True)
+        # 向 WebUI 注册插件面板的后端 API。
+        self._register_web_apis(context)
 
-        # 注册插件 Pages 后端 Web API（前端见 pages/demo/）。
-        context.register_web_api(
-            f"/{PLUGIN_NAME}/ping",
-            self.page_ping,
-            ["GET"],
-            "Page ping",
-        )
-
-    async def initialize(self):
-        """插件实例化后的异步初始化方法，可在这里加载资源、启动定时任务等。"""
-        logger.info("[插件模板] AstrBot 插件模板初始化完成")
-
-    async def terminate(self):
-        """插件被卸载/停用时调用，可在这里做资源清理。"""
-        logger.info("[插件模板] AstrBot 插件模板已卸载")
-
-    # ============ 基础指令：配置读取 + 富媒体消息链 ============
-
-    @filter.command("helloworld")
-    async def helloworld(self, event: AstrMessageEvent):
-        """演示配置读取与富媒体消息链。"""
-        greeting = self.config.get("greeting", "Hello")
-        user_name = event.get_sender_name()
-        yield event.chain_result(
-            [
-                Comp.At(qq=event.get_sender_id()),  # At 发送者
-                Comp.Plain(f"{greeting}, {user_name}~"),
-            ]
+        # 初始化时打印一次名单规模，便于人工核对配置是否被正确加载。
+        blocked = self._parse_blocked_users(self.config.get("blocked_users", []))
+        total = sum(len(ids) for ids in blocked.values())
+        logger.info(
+            f"{LOG_PREFIX} 插件初始化完成，共加载 {total} 条封禁名单。",
         )
 
-    # ============ 指令组 ============
-
-    @filter.command_group("demo")
-    def demo():
-        """演示指令组。输入 /demo 查看子指令树。"""
-
-    @demo.command("echo")
-    async def echo(self, event: AstrMessageEvent, text: str):
-        """复读机：演示带参指令与自动参数解析。"""
-        yield event.plain_result(f"你说了：{text}")
-
-    @demo.command("count")
-    async def count(self, event: AstrMessageEvent):
-        """计数器：演示插件 KV 存储。"""
-        # 用 asyncio 锁保护读-改-写，避免并发执行 /demo count 时递增丢失。
-        async with self._count_lock:
-            n = (await self.get_kv_data("count", 0)) + 1
-            limit = self.config.get("count_limit", 10)
-            if n >= limit:
-                await self.put_kv_data("count", 0)
-                reset = True
-            else:
-                await self.put_kv_data("count", n)
-                reset = False
-        if reset:
-            yield event.plain_result(f"计数达到上限 {limit}，已清零~")
-        else:
-            yield event.plain_result(f"这是第 {n} 次调用~")
-
-    @demo.command("send")
-    async def send(self, event: AstrMessageEvent):
-        """主动消息：演示向任意会话推送消息。"""
-        await self.context.send_message(
-            event.unified_msg_origin,
-            MessageChain().message("这是一条主动推送的消息~"),
-        )
-        yield event.plain_result("已发送主动消息~")
-
-    @demo.command("data")
-    async def data(self, event: AstrMessageEvent):
-        """数据目录：演示大文件存储规范。"""
-        yield event.plain_result(f"插件数据目录: {self.plugin_data_path}")
-
-    @demo.command("todo")
-    async def todo(self, event: AstrMessageEvent, text: str):
-        """待办卡片：演示文转图（HTML + Jinja2 渲染）。"""
-        items = [item.strip() for item in text.split(",") if item.strip()] or [
-            "吃饭",
-            "睡觉",
-            "写插件",
-        ]
-        url = await self.html_render(T2I_TMPL, {"items": items})
-        yield event.image_result(url)
-
-    @demo.command("guess")
-    async def guess(self, event: AstrMessageEvent):
-        """猜数字：演示会话控制（多轮交互）。"""
-        target = random.randint(1, 100)
-        yield event.plain_result("已生成一个 1-100 的数字，请猜一猜~（输入“退出”结束）")
-
-        # 自定义会话 ID：绑定到发送者，避免群内其他成员干扰本局游戏。
-        class GuessSessionFilter(SessionFilter):
-            def filter(self, ev: AstrMessageEvent) -> str:
-                return f"{ev.unified_msg_origin}:{ev.get_sender_id()}"
-
-        @session_waiter(timeout=60, record_history_chains=False)
-        async def guess_waiter(controller: SessionController, event: AstrMessageEvent):
-            text = event.message_str.strip()
-            if text == "退出":
-                await event.send(event.plain_result("已退出游戏~"))
-                controller.stop()
-                return
-            try:
-                num = int(text)
-            except ValueError:
-                await event.send(event.plain_result("请输入数字哦~"))
-                return
-            if num == target:
-                await event.send(event.plain_result("猜对啦！"))
-                controller.stop()
-            elif num < target:
-                await event.send(event.plain_result("小了"))
-                controller.keep(timeout=30, reset_timeout=True)
-            else:
-                await event.send(event.plain_result("大了"))
-                controller.keep(timeout=30, reset_timeout=True)
-
+    def _register_web_apis(self, context: Context) -> None:
+        """注册面板所需的后端 Web API。"""
         try:
-            await guess_waiter(event, session_filter=GuessSessionFilter())
-        except TimeoutError:
-            yield event.plain_result("超时啦，游戏结束。")
-        finally:
-            event.stop_event()
+            context.register_web_api(
+                f"/{PLUGIN_NAME}/dashboard/status",
+                self.api_status,
+                ["GET"],
+                "影子封禁运行状态",
+            )
+            context.register_web_api(
+                f"/{PLUGIN_NAME}/dashboard/recent",
+                self.api_recent,
+                ["GET"],
+                "影子封禁最近拦截记录",
+            )
+        except Exception as exc:  # noqa: BLE001
+            # 注册失败不应影响核心拦截能力。
+            logger.warning(f"{LOG_PREFIX} 注册面板 API 失败：{exc}")
 
-    @demo.command("ask")
-    async def ask(self, event: AstrMessageEvent, prompt: str):
-        """AI 问答：演示调用聊天模型。
+    # ==================================================================
+    # 配置解析
+    # ==================================================================
 
-        优先使用配置项 ai_provider 指定的提供商；未配置时回退到当前会话使用的聊天模型。
+    @staticmethod
+    def _parse_blocked_users(raw: object) -> dict[str, set[str]]:
+        """将配置中的封禁名单解析为 {平台: {用户ID}} 映射。
+
+        规则：
+
+        - 裸 ID 归入通配平台 ``"*"``，在任意平台生效；
+        - 带平台前缀的 ID 仅在指定平台生效。
         """
-        if not self.config.get("enable_ai", True):
-            yield event.plain_result("AI 功能已关闭，请在插件配置中开启。")
+        global_ids: set[str] = set()
+        platform_ids: dict[str, set[str]] = {}
+
+        if not isinstance(raw, (list, tuple)):
+            return {"*": global_ids}
+
+        for item in raw:
+            if item is None:
+                continue
+            text = str(item).strip()
+            if not text:
+                continue
+            if ":" in text:
+                platform, _, uid = text.partition(":")
+                platform = platform.strip()
+                uid = uid.strip()
+                if platform and uid:
+                    platform_ids.setdefault(platform, set()).add(uid)
+            else:
+                global_ids.add(text)
+
+        result: dict[str, set[str]] = {"*": global_ids}
+        result.update(platform_ids)
+        return result
+
+    # ==================================================================
+    # 判定逻辑
+    # ==================================================================
+
+    def _is_blocked_user(self, event: AstrMessageEvent) -> bool:
+        """判断当前消息发送者是否命中封禁名单。"""
+        sender_id = str(event.get_sender_id() or "").strip()
+        if not sender_id:
+            return False
+
+        # 每次判定都重新读取配置，确保 WebUI 保存后即时生效。
+        blocked = self._parse_blocked_users(self.config.get("blocked_users", []))
+
+        if sender_id in blocked.get("*", set()):
+            return True
+
+        platform = str(event.get_platform_name() or "").strip()
+        return bool(platform and sender_id in blocked.get(platform, set()))
+
+    @staticmethod
+    def _is_command_invoked(event: AstrMessageEvent) -> bool:
+        """判断本次 LLM 请求是否由指令（CommandFilter / CommandGroupFilter）触发。"""
+        # 框架在指令过滤器通过时，会把解析结果写入 handlers_parsed_params。
+        try:
+            if event.get_extra("handlers_parsed_params"):
+                return True
+        except Exception:  # noqa: BLE001
+            pass
+
+        # 兜底方案：直接检查被激活的 handler 是否带有指令过滤器。
+        if not _COMMAND_FILTER_TYPES:
+            return False
+        try:
+            activated = event.get_extra("activated_handlers") or []
+        except Exception:  # noqa: BLE001
+            return False
+
+        for handler in activated:
+            for flt in getattr(handler, "event_filters", []) or []:
+                if isinstance(flt, _COMMAND_FILTER_TYPES):
+                    return True
+        return False
+
+    def _should_intercept(self, event: AstrMessageEvent) -> bool:
+        """综合配置判定是否应当拦截本次 LLM 请求。"""
+        if not self.config.get("enable", True):
+            return False
+
+        if not self._is_blocked_user(event):
+            return False
+
+        # 群聊 / 私聊独立开关。
+        if event.is_private_chat():
+            if not self.config.get("enable_private", False):
+                return False
+        elif not self.config.get("enable_group", True):
+            return False
+
+        # 指令触发的 LLM 调用放行（非 LLM 响应的功能性回复）。
+        if self.config.get("allow_command_llm", True) and self._is_command_invoked(
+            event,
+        ):
+            return False
+
+        return True
+
+    @staticmethod
+    def _preview(text: str, limit: int = 30) -> str:
+        """截取消息预览，避免日志过长。"""
+        text = (text or "").replace("\n", " ").strip()
+        return text[:limit] + ("..." if len(text) > limit else "")
+
+    async def _ensure_block_count_loaded(self) -> None:
+        """首次访问时从插件 KV 存储读取累计拦截次数。
+
+        构造函数无法 await，故延迟加载；若不先加载就自增，
+        会把历史累计值覆盖成本次运行的值。
+        """
+        if self._block_count_loaded:
             return
         try:
-            provider_id = self.config.get("ai_provider", "") or (
-                await self.context.get_current_chat_provider_id(
-                    event.unified_msg_origin
-                )
-            )
-            if not provider_id:
-                yield event.plain_result(
-                    "当前会话没有可用的聊天模型，请先在 WebUI 配置。"
-                )
-                return
-            llm_resp = await self.context.llm_generate(
-                chat_provider_id=provider_id,
-                prompt=prompt,
-            )
-        except Exception as e:
-            logger.error(f"/demo ask 请求失败: {e}")
-            yield event.plain_result("AI 请求失败，请检查模型提供商配置后重试。")
-            return
-        yield event.plain_result(llm_resp.completion_text)
+            stored = await self.get_kv_data(BLOCK_COUNT_KEY, 0)
+            self._block_count = int(stored) if stored else 0
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(f"{LOG_PREFIX} 读取累计拦截次数失败，将从 0 开始：{exc}")
+            self._block_count = 0
+        self._block_count_loaded = True
 
-    # ============ 权限过滤 ============
+    async def _persist_block_count(self) -> None:
+        """将累计拦截次数写入插件 KV 存储。"""
+        try:
+            await self.put_kv_data(BLOCK_COUNT_KEY, int(self._block_count))
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(f"{LOG_PREFIX} 持久化累计拦截次数失败：{exc}")
 
-    @demo.command("admin")
-    @filter.permission_type(filter.PermissionType.ADMIN)
-    async def admin(self, event: AstrMessageEvent):
-        """仅管理员可用的指令：演示权限过滤。"""
-        yield event.plain_result(
-            f"管理员指令生效，当前平台: {event.get_platform_name()}"
+    async def _record_block(self, event: AstrMessageEvent) -> None:
+        """记录一次拦截事件，累计值持久化，供面板展示。"""
+        await self._ensure_block_count_loaded()
+        self._block_count += 1
+        self._recent_blocks.append(
+            {
+                "time": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
+                "scope": "私聊" if event.is_private_chat() else "群聊",
+                "platform": event.get_platform_name() or "",
+                "user_id": str(event.get_sender_id() or ""),
+                "group_id": str(event.get_group_id() or ""),
+                "content": self._preview(event.message_str, 60),
+            },
         )
+        await self._persist_block_count()
 
-    # ============ LLM 工具 ============
+    # ==================================================================
+    # LLM 请求钩子（单点拦截）
+    # ==================================================================
 
-    @filter.llm_tool(name="get_weather")
-    async def get_weather(
-        self, event: AstrMessageEvent, location: str
-    ) -> MessageEventResult:
-        """获取指定地点的天气信息。
-
-        注意：这是一个演示用的模拟工具，返回的数据为硬编码示例，并非真实天气。
-        请在用户明确要求使用该工具时再调用，而不是认为该工具实际可用并对返回结果信以为真。
-
-        Args:
-            location(string): 地点
-        """
-        yield event.plain_result(f"{location} 的天气：晴，25°C（模拟数据，仅作演示）")
-
-    # ============ 事件钩子 ============
-    # 注意：事件钩子不能与指令装饰器（command/command_group 等）共用，
-    # 它们注册的是全局钩子，会拦截所有消息 / LLM 请求。
-
-    @filter.on_astrbot_loaded()
-    async def on_astrbot_loaded(self):
-        """AstrBot 初始化完成时触发。"""
-        logger.info("[插件模板] AstrBot 加载完成，插件模板就绪")
-
-    @filter.on_waiting_llm_request()
-    async def on_waiting_llm(self, event: AstrMessageEvent):
-        """等待 LLM 响应时触发，适合发送"正在思考"提示。
-
-        注意：此钩子默认关闭（enable_waiting_hint=false），
-        且仅在 enable_ai=true 时才生效；
-        开启后每次调用 LLM 都会额外发送一条提示消息，
-        会影响日常使用，请按需开启。
-        """
-        if not self.config.get("enable_waiting_hint", False):
+    @filter.on_llm_request(priority=10000)
+    async def on_llm_request(
+        self,
+        event: AstrMessageEvent,
+        req: ProviderRequest,
+    ) -> None:
+        """在 LLM 请求发出前进行拦截。"""
+        if event.is_stopped():
             return
-        if not self.config.get("enable_ai", True):
+        try:
+            if not self._should_intercept(event):
+                return
+        except Exception as exc:  # noqa: BLE001
+            # 判定异常时选择放行，避免误伤正常用户。
+            logger.error(f"{LOG_PREFIX} 判定封禁状态时出错，已放行：{exc}")
             return
-        await event.send(event.plain_result("🤔 正在思考中..."))
 
-    @filter.on_llm_request()
-    async def on_llm_request(self, event: AstrMessageEvent, req: ProviderRequest):
-        """LLM 请求发出前触发，可修改请求（注意有三参数）。"""
-        system_prompt = (req.system_prompt or "")[:50]
-        logger.debug(f"on_llm_request: system_prompt={system_prompt}...")
+        # 终止事件传播：管线将跳过后续所有阶段，LLM 不会被调用，也不会回送消息。
+        event.stop_event()
 
-    @filter.on_llm_response()
-    async def on_llm_response(self, event: AstrMessageEvent, resp: LLMResponse):
-        """LLM 请求完成后触发（注意有三参数）。"""
-        logger.debug(f"on_llm_response: {resp.completion_text[:50]}...")
+        scope = "私聊" if event.is_private_chat() else "群聊"
+        logger.info(
+            f"{LOG_PREFIX} 已拦截来自{scope}的 LLM 请求 | "
+            f"平台为{event.get_platform_name()} "
+            f"用户是 {event.get_sender_id()} "
+            f"群组：{event.get_group_id() or '-'} "
+            f"内容：{self._preview(event.message_str)}",
+        )
+        await self._record_block(event)
 
-    @filter.on_agent_begin()
-    async def on_agent_begin(
-        self,
-        event: AstrMessageEvent,
-        run_context: ContextWrapper[AstrAgentContext],
-    ):
-        """Agent 开始运行时触发（AstrBot > v4.23.1）。"""
-        logger.debug("on_agent_begin: Agent 开始运行")
+    # ==================================================================
+    # 面板后端 API
+    # ==================================================================
 
-    @filter.on_using_llm_tool()
-    async def on_using_llm_tool(
-        self,
-        event: AstrMessageEvent,
-        tool: FunctionTool,
-        tool_args: dict | None,
-    ):
-        """LLM 工具调用前触发（AstrBot > v4.23.1）。"""
-        logger.debug(f"on_using_llm_tool: {tool.name} args={tool_args}")
-
-    @filter.on_llm_tool_respond()
-    async def on_llm_tool_respond(
-        self,
-        event: AstrMessageEvent,
-        tool: FunctionTool,
-        tool_args: dict | None,
-        tool_result: CallToolResult | None,
-    ):
-        """LLM 工具调用完成后触发（AstrBot > v4.23.1）。"""
-        logger.debug(f"on_llm_tool_respond: {tool.name}")
-
-    @filter.on_agent_done()
-    async def on_agent_done(
-        self,
-        event: AstrMessageEvent,
-        run_context: ContextWrapper[AstrAgentContext],
-        resp: LLMResponse,
-    ):
-        """Agent 运行完成时触发（AstrBot > v4.23.1）。"""
-        logger.debug("on_agent_done: Agent 运行完成")
-
-    @filter.on_decorating_result()
-    async def on_decorating_result(self, event: AstrMessageEvent):
-        """发送消息前触发，可装饰消息链（不能 yield，需修改 result.chain）。
-
-        仅当配置 enable_decorate 为 true 时才会追加感叹号，
-        避免钩子影响日常消息（演示用开关控制钩子行为）。
-        """
-        if not self.config.get("enable_decorate", False):
-            return
-        result = event.get_result()
-        chain = result.chain
-        # 若最后一段是纯文本，则直接追加；否则新加一条纯文本消息段。
-        if chain and isinstance(chain[-1], Comp.Plain):
-            chain[-1].text += "!"
-        else:
-            chain.append(Comp.Plain("!"))
-
-    @filter.after_message_sent()
-    async def after_message_sent(self, event: AstrMessageEvent):
-        """消息发送后触发（不能 yield）。"""
-        logger.debug("after_message_sent: 消息已发送")
-
-    # ============ 插件 Pages 后端 API ============
-
-    async def page_ping(self):
-        """pages/demo 页面调用的后端 API。"""
-        limit = request.query.get("limit", 20, type=int)
+    async def api_status(self):
+        """返回插件运行状态与封禁名单概况。"""
+        await self._ensure_block_count_loaded()
+        raw = self.config.get("blocked_users", []) or []
+        parsed = self._parse_blocked_users(raw)
+        global_ids = sorted(parsed.get("*", set()))
+        platform_ids = {
+            platform: sorted(ids) for platform, ids in parsed.items() if platform != "*"
+        }
         return json_response(
             {
-                "message": "pong",
-                "limit": limit,
-                "plugin": request.plugin_name,
-                "username": request.username,
-            }
+                "enable": bool(self.config.get("enable", True)),
+                "enable_group": bool(self.config.get("enable_group", True)),
+                "enable_private": bool(self.config.get("enable_private", False)),
+                "allow_command_llm": bool(
+                    self.config.get("allow_command_llm", True),
+                ),
+                "blocked_users": [str(item) for item in raw if str(item).strip()],
+                "global_ids": global_ids,
+                "platform_ids": platform_ids,
+                "total_blocked_users": sum(len(ids) for ids in parsed.values()),
+                "block_count": self._block_count,
+            },
         )
+
+    async def api_recent(self):
+        """返回最近的拦截记录。"""
+        try:
+            limit = request.query.get("limit", 30, type=int) or 30
+        except Exception:  # noqa: BLE001
+            limit = 30
+        limit = max(1, min(int(limit), RECENT_BLOCK_MAX))
+        # 最新的记录排在最前。
+        items = list(self._recent_blocks)[-limit:][::-1]
+        return json_response(
+            {
+                "items": items,
+                "count": len(self._recent_blocks),
+            },
+        )
+
+    # ==================================================================
+    # 生命周期
+    # ==================================================================
+
+    async def terminate(self) -> None:
+        """插件被卸载 / 停用时调用。"""
+        # 兜底落盘；未加载过时不自增，避免覆盖历史值。
+        if self._block_count_loaded:
+            await self._persist_block_count()
+        logger.info(f"{LOG_PREFIX} 插件已卸载，累计拦截 {self._block_count} 次。")
