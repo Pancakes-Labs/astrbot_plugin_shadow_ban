@@ -188,7 +188,7 @@ def build_banner_lines(version: str | None = None) -> list[str]:
     art_width = max(_display_width(line) for line in art_lines)
     inner_width = art_width + 4  # 左右各留 2 空格
 
-    version_text = (version if version is not None else _read_plugin_version())
+    version_text = version if version is not None else _read_plugin_version()
     version_text = (version_text or "").strip()
 
     # 版权年份区间：起始年份固定 2026，结束年份动态取当前年份；
