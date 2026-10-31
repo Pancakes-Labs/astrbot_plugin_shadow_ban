@@ -3,68 +3,231 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
     <title>影子封禁面板</title>
     <link rel="stylesheet" href="./style.css" />
   </head>
   <body>
+    <div class="backdrop" aria-hidden="true">
+      <span class="orb orb-a"></span>
+      <span class="orb orb-b"></span>
+      <span class="orb orb-c"></span>
+      <span class="grid-lines"></span>
+    </div>
+
     <main class="wrap">
-      <header class="head">
-        <h1 id="heading">影子封禁面板</h1>
-        <p id="desc" class="desc"></p>
+      <header class="hero">
+        <div class="hero-top">
+          <div class="brand">
+            <span class="brand-mark">
+              <img src="./logo.png" alt="" aria-hidden="true" />
+            </span>
+            <div class="brand-text">
+              <h1 id="heading">影子封禁面板</h1>
+              <p id="desc" class="desc"></p>
+            </div>
+          </div>
+
+          <div class="hero-actions">
+            <span class="status-pill" id="status-pill">
+              <i class="pulse" aria-hidden="true"></i>
+              <span id="status-text">-</span>
+            </span>
+            <button id="refresh" class="btn btn-ghost" type="button">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M20 12a8 8 0 1 1-2.4-5.7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+                <path d="M20 4.5V10h-5.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+              <span id="refresh-label">刷新</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="hero-meta">
+          <span class="meta-item">
+            <span class="meta-label" id="meta-version-label">版本</span>
+            <span class="meta-value" id="meta-version">-</span>
+          </span>
+          <span class="meta-sep" aria-hidden="true"></span>
+          <span class="meta-item">
+            <span class="meta-label" id="meta-uptime-label">运行时长</span>
+            <span class="meta-value" id="meta-uptime">-</span>
+          </span>
+          <span class="meta-sep" aria-hidden="true"></span>
+          <span class="meta-item">
+            <span class="meta-label" id="meta-last-label">最近拦截</span>
+            <span class="meta-value" id="meta-last">-</span>
+          </span>
+        </div>
       </header>
 
-      <section class="cards">
-        <div class="card">
-          <span class="card-label" id="label-total">封禁用户</span>
-          <span class="card-value" id="total-users">-</span>
-        </div>
-        <div class="card">
-          <span class="card-label" id="label-blocks">累计拦截</span>
-          <span class="card-value" id="block-count">-</span>
-        </div>
-        <div class="card">
-          <span class="card-label" id="label-switch">插件总开关</span>
-          <span class="card-value" id="switch-state">-</span>
-        </div>
+      <section class="kpis">
+        <article class="kpi kpi-violet">
+          <span class="kpi-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none">
+              <circle cx="12" cy="8.4" r="3.6" stroke="currentColor" stroke-width="1.7" />
+              <path d="M4.8 20c.6-3.7 3.6-5.8 7.2-5.8s6.6 2.1 7.2 5.8" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" />
+            </svg>
+          </span>
+          <div class="kpi-body">
+            <span class="kpi-label" id="label-total">封禁用户</span>
+            <span class="kpi-value" id="total-users">-</span>
+            <span class="kpi-sub" id="kpi-total-sub"></span>
+          </div>
+        </article>
+
+        <article class="kpi kpi-cyan">
+          <span class="kpi-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none">
+              <path d="M12 3 4.8 6.2v5.3c0 4.4 3 8.1 7.2 9.5 4.2-1.4 7.2-5.1 7.2-9.5V6.2L12 3Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" />
+              <path d="m9 11.8 2.2 2.2L15.4 9.8" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+          </span>
+          <div class="kpi-body">
+            <span class="kpi-label" id="label-blocks">累计拦截</span>
+            <span class="kpi-value" id="block-count">-</span>
+            <span class="kpi-sub" id="kpi-blocks-sub"></span>
+          </div>
+        </article>
+
+        <article class="kpi kpi-amber">
+          <span class="kpi-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none">
+              <path d="M12 7v5.2l3.2 1.9" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" />
+              <circle cx="12" cy="12" r="8.6" stroke="currentColor" stroke-width="1.7" />
+            </svg>
+          </span>
+          <div class="kpi-body">
+            <span class="kpi-label" id="label-recent">最近记录</span>
+            <span class="kpi-value" id="recent-count">-</span>
+            <span class="kpi-sub" id="kpi-recent-sub"></span>
+          </div>
+        </article>
+
+        <article class="kpi kpi-emerald" id="kpi-switch">
+          <span class="kpi-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none">
+              <rect x="3.2" y="7.4" width="17.6" height="9.2" rx="4.6" stroke="currentColor" stroke-width="1.7" />
+              <circle cx="16.4" cy="12" r="2.5" fill="currentColor" />
+            </svg>
+          </span>
+          <div class="kpi-body">
+            <span class="kpi-label" id="label-switch">插件总开关</span>
+            <span class="kpi-value kpi-value-sm" id="switch-state">-</span>
+            <span class="kpi-sub" id="kpi-switch-sub"></span>
+          </div>
+        </article>
       </section>
 
-      <section class="panel">
-        <h2 id="switches-title">生效范围</h2>
-        <ul class="switches" id="switches"></ul>
-      </section>
+      <div class="layout">
+        <div class="col">
+          <section class="panel">
+            <header class="panel-head">
+              <div class="head-left">
+                <h2 id="switches-title">生效范围</h2>
+              </div>
+              <span class="panel-hint" id="switches-hint"></span>
+            </header>
+            <ul class="switches" id="switches"></ul>
+          </section>
 
-      <section class="panel">
-        <h2 id="list-title">封禁名单</h2>
-        <div class="list-box" id="block-list">
-          <span class="empty" id="list-empty">暂无封禁用户</span>
-        </div>
-      </section>
+          <section class="panel">
+            <header class="panel-head">
+              <div class="head-left">
+                <h2 id="list-title">封禁名单</h2>
+                <span class="badge" id="list-count">0</span>
+              </div>
+            </header>
 
-      <section class="panel">
-        <div class="panel-head">
-          <h2 id="recent-title">最近拦截记录</h2>
-          <button id="refresh" class="btn">刷新</button>
+            <div class="list-toolbar">
+              <label class="field">
+                <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <circle cx="11" cy="11" r="6.4" stroke="currentColor" stroke-width="1.8" />
+                  <path d="m16 16 4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+                </svg>
+                <input id="list-search" type="search" autocomplete="off" />
+              </label>
+
+              <form class="add-form" id="add-form" autocomplete="off">
+                <label class="field field-grow">
+                  <input id="add-input" type="text" autocomplete="off" />
+                </label>
+                <button class="btn" type="submit" id="add-button">添加</button>
+              </form>
+            </div>
+
+            <div class="list-box" id="block-list">
+              <span class="empty" id="list-empty">暂无封禁用户</span>
+            </div>
+          </section>
         </div>
-        <div class="table-box">
-          <table class="table">
-            <thead>
-              <tr>
-                <th id="th-time">时间</th>
-                <th id="th-scope">类型</th>
-                <th id="th-platform">平台</th>
-                <th id="th-user">用户</th>
-                <th id="th-content">内容</th>
-              </tr>
-            </thead>
-            <tbody id="recent-body">
-              <tr>
-                <td colspan="5" class="empty" id="recent-empty">暂无记录</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
+
+        <section class="panel panel-table">
+          <header class="panel-head">
+            <div class="head-left">
+              <h2 id="recent-title">最近拦截记录</h2>
+              <span class="badge" id="recent-usage">0 / 100</span>
+            </div>
+            <button id="clear-recent" class="btn btn-danger-ghost" type="button">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M5 7h14M9.5 7V5.4c0-.6.5-1 1-1h3c.6 0 1 .4 1 1V7" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" />
+                <path d="M7.4 7l.8 12c0 .6.5 1 1.1 1h5.4c.6 0 1.1-.4 1.1-1l.8-12" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" />
+              </svg>
+              <span id="clear-label">清空记录</span>
+            </button>
+          </header>
+
+          <div class="table-toolbar">
+            <div class="chips" id="scope-filter" role="group"></div>
+            <label class="field field-sm">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <circle cx="11" cy="11" r="6.4" stroke="currentColor" stroke-width="1.8" />
+                <path d="m16 16 4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+              </svg>
+              <input id="record-search" type="search" autocomplete="off" />
+            </label>
+          </div>
+
+          <div class="table-box">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th id="th-time">时间</th>
+                  <th id="th-scope">类型</th>
+                  <th id="th-platform">平台</th>
+                  <th id="th-user">用户</th>
+                  <th id="th-content">内容</th>
+                </tr>
+              </thead>
+              <tbody id="recent-body">
+                <tr>
+                  <td colspan="5" class="empty" id="recent-empty">暂无记录</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+
     </main>
+
+    <div class="toasts" id="toasts" aria-live="polite" aria-atomic="false"></div>
+
+    <div class="modal-backdrop" id="modal" hidden>
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+        <h3 id="modal-title"></h3>
+        <p class="modal-desc" id="modal-desc"></p>
+        <label class="check" id="modal-extra-wrap" hidden>
+          <input type="checkbox" id="modal-extra" />
+          <span id="modal-extra-label"></span>
+        </label>
+        <div class="modal-actions">
+          <button class="btn btn-ghost" id="modal-cancel" type="button"></button>
+          <button class="btn btn-danger" id="modal-confirm" type="button"></button>
+        </div>
+      </div>
+    </div>
+
     <script type="module" src="./app.js"></script>
   </body>
 </html>
